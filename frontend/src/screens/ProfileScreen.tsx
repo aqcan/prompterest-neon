@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../store/useStore';
 import { hapticLight, hapticMedium } from '../utils/haptics';
+import { PremiumUpgradeScreen } from './PremiumUpgradeScreen';
 
 export function ProfileScreen() {
   const user = useStore((s) => s.user);
@@ -10,14 +11,17 @@ export function ProfileScreen() {
   const login = useStore((s) => s.login);
   const register = useStore((s) => s.register);
   const logout = useStore((s) => s.logout);
-  const openNewPrompt = useStore((s) => s.openNewPrompt);
   const savedPrompts = useStore((s) => s.savedPrompts);
+  const savedLoading = useStore((s) => s.savedLoading);
+  const navigateToPrompt = useStore((s) => s.navigateToPrompt);
   const prompts = useStore((s) => s.prompts);
 
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [showPremium, setShowPremium] = useState(false);
+  const [showBookmarks, setShowBookmarks] = useState(false);
 
   const stagger = {
     hidden: {},
@@ -60,11 +64,11 @@ export function ProfileScreen() {
             variants={fadeUp}
             className="relative rounded-3xl overflow-hidden"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-accent-violet/30 via-accent-violet/10 to-purple-900/20" />
+            <div className="absolute inset-0 bg-gradient-to-br from-accent-violet/30 via-accent-violet/10 to-surface-3/20" />
             <div className="absolute inset-0 border border-accent-violet/15 rounded-3xl" />
             <div className="relative p-6 text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-accent-violet/20 border border-accent-violet/20 flex items-center justify-center">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#a3b18a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
                 </svg>
@@ -150,6 +154,7 @@ export function ProfileScreen() {
 
   // ── LOGGED IN ─────────────────────────────────────────
   return (
+    <>
     <div className="w-full h-full bg-surface-0 overflow-y-auto overscroll-contain">
       <div className="sticky top-0 z-20 bg-surface-0/80 backdrop-blur-xl border-b border-white/[0.04]">
         <div className="px-5 pt-14 pb-4">
@@ -165,12 +170,12 @@ export function ProfileScreen() {
       >
         {/* Profile Card */}
         <motion.div variants={fadeUp} className="relative rounded-3xl overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-accent-violet/30 via-accent-violet/10 to-purple-900/20" />
+          <div className="absolute inset-0 bg-gradient-to-br from-accent-violet/30 via-accent-violet/10 to-surface-3/20" />
           <div className="absolute inset-0 border border-accent-violet/15 rounded-3xl" />
           <div className="relative p-5">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-accent-violet/20 border border-accent-violet/20 flex items-center justify-center">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a3b18a" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
                 </svg>
@@ -200,20 +205,49 @@ export function ProfileScreen() {
           </div>
         </motion.div>
 
-        {/* New Prompt */}
+        {/* Bookmarked */}
         <motion.div variants={fadeUp}>
           <button
             onClick={() => {
               hapticMedium();
-              openNewPrompt();
+              setShowBookmarks(true);
             }}
-            className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl bg-accent-violet/15 border border-accent-violet/20 font-display text-sm font-semibold text-accent-violet active:scale-[0.98] transition-transform"
+            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-surface-2 border border-white/[0.06] active:scale-[0.98] transition-transform"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            New Prompt
+            <div className="flex items-center gap-3">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
+              </svg>
+              <span className="font-display text-sm font-semibold text-white">Bookmarked</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-body text-xs text-white/30">{savedPrompts.length}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </div>
+          </button>
+        </motion.div>
+
+        {/* Premium upgrade */}
+        <motion.div variants={fadeUp}>
+          <button
+            onClick={() => {
+              hapticMedium();
+              setShowPremium(true);
+            }}
+            className="w-full flex items-center justify-between px-5 py-3.5 rounded-2xl bg-surface-2 border border-white/[0.06] active:scale-[0.98] transition-transform"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-accent-violet text-base">★</span>
+              <span className="font-display text-sm font-semibold text-white">Premium'a Geç</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-body text-xs text-white/30">Free</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </div>
           </button>
         </motion.div>
 
@@ -239,5 +273,125 @@ export function ProfileScreen() {
         </motion.p>
       </motion.div>
     </div>
+
+    {/* Bookmarks Sheet */}
+    <AnimatePresence>
+      {showBookmarks && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/50"
+            onClick={() => setShowBookmarks(false)}
+          />
+
+          {/* Sheet */}
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="fixed bottom-0 inset-x-0 z-[61] bg-surface-1 rounded-t-3xl max-h-[75vh] flex flex-col"
+          >
+            {/* Handle */}
+            <div className="pt-3 pb-1 flex-shrink-0">
+              <div className="w-12 h-1 rounded-full bg-white/20 mx-auto" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06] flex-shrink-0">
+              <h3 className="font-display text-base font-semibold text-white">Bookmarked</h3>
+              <button
+                onClick={() => setShowBookmarks(false)}
+                className="w-8 h-8 rounded-full bg-white/[0.06] flex items-center justify-center"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto overscroll-contain py-3 px-4 space-y-2 pb-10">
+              {savedLoading && (
+                <div className="flex items-center justify-center py-10">
+                  <svg className="w-6 h-6 animate-spin text-white/30" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </div>
+              )}
+
+              {!savedLoading && savedPrompts.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 gap-2">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
+                  </svg>
+                  <p className="font-body text-sm text-white/25">Henüz bookmark yok</p>
+                </div>
+              )}
+
+              {!savedLoading && savedPrompts.map((saved) => (
+                <button
+                  key={saved.id}
+                  onClick={() => {
+                    hapticLight();
+                    setShowBookmarks(false);
+                    navigateToPrompt(saved.promptId);
+                  }}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl bg-white/[0.04] border border-white/[0.05] active:scale-[0.98] transition-transform text-left"
+                >
+                  {/* Thumbnail */}
+                  <div className="w-12 h-12 rounded-xl bg-surface-3 flex-shrink-0 overflow-hidden">
+                    {saved.prompt.imageUrl ? (
+                      <img
+                        src={saved.prompt.imageUrl}
+                        alt={saved.prompt.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5">
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display text-sm font-medium text-white truncate">
+                      {saved.prompt.title || 'Başlıksız'}
+                    </p>
+                    {saved.prompt.authorUsername && (
+                      <p className="font-body text-xs text-white/30 mt-0.5 truncate">
+                        @{saved.prompt.authorUsername}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Chevron */}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+
+    <AnimatePresence>
+      {showPremium && (
+        <PremiumUpgradeScreen onClose={() => setShowPremium(false)} />
+      )}
+    </AnimatePresence>
+    </>
   );
 }
