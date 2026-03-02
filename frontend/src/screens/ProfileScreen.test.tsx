@@ -11,8 +11,9 @@ const BASE_STATE = {
   login: vi.fn(),
   register: vi.fn(),
   logout: vi.fn(),
-  openNewPrompt: vi.fn(),
   savedPrompts: [],
+  savedLoading: false,
+  navigateToPrompt: vi.fn(),
   prompts: [],
 };
 
@@ -76,9 +77,9 @@ describe('ProfileScreen — authenticated', () => {
     expect(screen.getByRole('button', { name: /sign out/i })).toBeInTheDocument();
   });
 
-  it('renders a New Prompt button', () => {
+  it('renders a Bookmarked button', () => {
     render(<ProfileScreen />);
-    expect(screen.getByRole('button', { name: /new prompt/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /bookmarked/i })).toBeInTheDocument();
   });
 
   it('calls logout when Sign Out is clicked', async () => {
