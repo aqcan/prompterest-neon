@@ -1,24 +1,39 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './store/useStore';
 import { BottomNav } from './components/BottomNav';
-import { FeedScreen } from './screens/FeedScreen';
-import { SavedScreen } from './screens/SavedScreen';
+import { ExploreScreen } from './screens/ExploreScreen';
+import { FollowingScreen } from './screens/FollowingScreen';
+import { StudioScreen } from './screens/StudioScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { PromptEditorScreen } from './screens/PromptEditorScreen';
+import { CreateHubModal } from './screens/CreateHubModal';
+import { OnboardingModal } from './screens/OnboardingModal';
 import { NewPromptScreen } from './screens/NewPromptScreen';
 
 export default function App() {
   const activeTab = useStore((s) => s.activeTab);
   const editorPromptId = useStore((s) => s.editorPromptId);
+  const createHubOpen = useStore((s) => s.createHubOpen);
   const newPromptOpen = useStore((s) => s.newPromptOpen);
   const initAuth = useStore((s) => s.initAuth);
   const loadPrompts = useStore((s) => s.loadPrompts);
+  const user = useStore((s) => s.user);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     initAuth();
     loadPrompts();
   }, [initAuth, loadPrompts]);
+
+  // Onboarding: user login olduktan sonra survey_done yoksa göster
+  useEffect(() => {
+    if (user && !localStorage.getItem('survey_done')) {
+      setShowOnboarding(true);
+    } else {
+      setShowOnboarding(false);
+    }
+  }, [user]);
 
   return (
     <div className="fixed inset-0 bg-surface-0 font-body text-white overflow-hidden select-none">
@@ -32,8 +47,9 @@ export default function App() {
           transition={{ duration: 0.2, ease: 'easeOut' }}
           className="absolute inset-0"
         >
-          {activeTab === 'feed' && <FeedScreen />}
-          {activeTab === 'saved' && <SavedScreen />}
+          {activeTab === 'explore' && <ExploreScreen />}
+          {activeTab === 'following' && <FollowingScreen />}
+          {activeTab === 'studio' && <StudioScreen />}
           {activeTab === 'profile' && <ProfileScreen />}
         </motion.div>
       </AnimatePresence>
@@ -46,10 +62,20 @@ export default function App() {
         {editorPromptId && <PromptEditorScreen />}
       </AnimatePresence>
 
-      {/* New prompt screen overlay */}
+      {/* Create Hub Modal */}
+      <AnimatePresence>
+        {createHubOpen && <CreateHubModal />}
+      </AnimatePresence>
+
+      {/* New Prompt Screen overlay */}
       <AnimatePresence>
         {newPromptOpen && <NewPromptScreen />}
       </AnimatePresence>
+
+      {/* Onboarding Modal — login sonrası bir kez gösterilir */}
+      {showOnboarding && (
+        <OnboardingModal onComplete={() => setShowOnboarding(false)} />
+      )}
     </div>
   );
 }
