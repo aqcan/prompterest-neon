@@ -7,14 +7,14 @@ import { FollowingScreen } from './screens/FollowingScreen';
 import { StudioScreen } from './screens/StudioScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { PromptEditorScreen } from './screens/PromptEditorScreen';
-import { CreateHubModal } from './screens/CreateHubModal';
+import { CreateScreen } from './screens/CreateScreen';
 import { OnboardingModal } from './screens/OnboardingModal';
 import { NewPromptScreen } from './screens/NewPromptScreen';
 
 export default function App() {
   const activeTab = useStore((s) => s.activeTab);
   const editorPromptId = useStore((s) => s.editorPromptId);
-  const createHubOpen = useStore((s) => s.createHubOpen);
+  const createScreenOpen = useStore((s) => s.createScreenOpen);
   const newPromptOpen = useStore((s) => s.newPromptOpen);
   const initAuth = useStore((s) => s.initAuth);
   const loadPrompts = useStore((s) => s.loadPrompts);
@@ -62,9 +62,9 @@ export default function App() {
         {editorPromptId && <PromptEditorScreen />}
       </AnimatePresence>
 
-      {/* Create Hub Modal */}
+      {/* Create Screen */}
       <AnimatePresence>
-        {createHubOpen && <CreateHubModal />}
+        {createScreenOpen && <CreateScreen />}
       </AnimatePresence>
 
       {/* New Prompt Screen overlay */}
