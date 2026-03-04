@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { db } from '../db/index.js';
 import {
-  generations, styles, prompts,
+  generations, styles, templates, prompts,
   coinBalances, coinTransactions,
 } from '../db/schema.js';
 import { eq, sql } from 'drizzle-orm';
@@ -64,7 +64,7 @@ async function refundCoins(
 // ── POST /api/generate ────────────────────────────────────────────────────────
 app.post('/', authMiddleware, async (c) => {
   const userId = c.get('userId') as string;
-  const { userText, scene, styleId, modelId, inputImageBase64, idempotencyKey } =
+  const { userText, scene, styleId, modelId, inputImageBase64, idempotencyKey, templateId } =
     await c.req.json();
 
   if (!userText && !inputImageBase64) {
@@ -93,7 +93,7 @@ app.post('/', authMiddleware, async (c) => {
   // 2. Generation kaydı aç (pending)
   const [gen] = await db
     .insert(generations)
-    .values({ userId, styleId, modelId, idempotencyKey, coinCost, status: 'pending' })
+    .values({ userId, styleId, templateId: templateId ?? null, modelId, idempotencyKey, coinCost, status: 'pending' })
     .returning();
 
   // 3. Style doğrulaması + premium guard
@@ -141,8 +141,24 @@ app.post('/', authMiddleware, async (c) => {
     throw e;
   }
 
-  // 5. Prompt birleştir (systemPrompt backend'de eklenir)
-  const finalPrompt = buildPromptWithStyle(userText ?? '', scene, style.systemPrompt);
+  // 3b. Template yükleme (opsiyonel)
+  let templateSystemPrompt = '';
+  if (templateId) {
+    const template = await db.query.templates.findFirst({
+      where: eq(templates.id, templateId),
+    });
+    if (!template) {
+      await failGeneration(gen.id, '400');
+      throw new HTTPException(400, { message: 'invalid_template' });
+    }
+    templateSystemPrompt = template.systemPrompt;
+  }
+
+  // 5. Prompt birleştir (systemPrompt backend'de eklenir: style + template + userText)
+  const combinedSystemContext = [style.systemPrompt, templateSystemPrompt]
+    .filter(Boolean)
+    .join(', ');
+  const finalPrompt = buildPromptWithStyle(userText ?? '', scene, combinedSystemContext);
 
   // 6. AtlasCloud API (timeout: 30sn)
   let imageUrl: string;
