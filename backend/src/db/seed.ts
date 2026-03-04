@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { db } from './index.js';
-import { styles } from './schema.js';
+import { styles, templates } from './schema.js';
 
 async function seed() {
   await db.insert(styles).values([
@@ -93,6 +93,26 @@ async function seed() {
   ]).onConflictDoNothing();
 
   console.log('Styles seeded.');
+
+  // ── Templates ───────────────────────────────────────────────────────
+  await db.insert(templates).values([
+    // Photo modu
+    { id: 'face_swap',  name: 'Yüz Değiştir',   description: 'Fotoğraftaki yüzü başka biriyle değiştir',   mode: 'photo',   systemPrompt: 'Perform a seamless face swap, maintaining natural skin tone, lighting, and facial expressions. Preserve the original background and body pose exactly.', coinCost: 3, emoji: '🔄', isPremium: false, sortOrder: 1 },
+    { id: 'headshot',   name: 'Vesikalık',        description: 'Profesyonel profil fotoğrafı oluştur',        mode: 'photo',   systemPrompt: 'Transform into a professional corporate headshot with neutral studio background, soft even lighting, sharp focus on face, business-appropriate framing.', coinCost: 2, emoji: '📸', isPremium: false, sortOrder: 2 },
+    { id: 'age_filter', name: 'Yaş Filtresi',     description: 'Daha genç veya daha yaşlı göster',           mode: 'photo',   systemPrompt: 'Age transformation: modify facial features, skin texture, and hair to realistically depict the subject at a different age while preserving identity.', coinCost: 2, emoji: '⏳', isPremium: false, sortOrder: 3 },
+    { id: 'bg_change',  name: 'Arka Plan',         description: 'Arka planı tamamen değiştir',                mode: 'photo',   systemPrompt: 'Replace the background completely with a new environment. Keep the subject perfectly cut out with natural edge blending and matching light direction.', coinCost: 2, emoji: '🌄', isPremium: false, sortOrder: 4 },
+    { id: 'upscale',    name: 'Keskinleştir',      description: 'Fotoğraf kalitesini ve detayı artır',        mode: 'photo',   systemPrompt: 'Upscale and enhance image quality: increase resolution 4x, sharpen details, reduce noise, restore fine textures while maintaining natural look.', coinCost: 2, emoji: '🔍', isPremium: false, sortOrder: 5 },
+    // Scratch modu
+    { id: 'animal_mix', name: 'Hayvan Karışımı',  description: 'İki hayvanı birleştiren yaratık oluştur',    mode: 'scratch', systemPrompt: 'Create a photorealistic hybrid creature combining two animals. Show anatomical features from both species seamlessly merged, natural fur/skin textures, dramatic lighting.', coinCost: 2, emoji: '🦁', isPremium: false, sortOrder: 1 },
+    { id: 'meme_gen',   name: 'Meme Oluştur',      description: 'Klasik meme formatında görsel',              mode: 'scratch', systemPrompt: 'Generate an internet meme-style image with bold impact font aesthetic, humorous scene, exaggerated expressions, high contrast colors.', coinCost: 2, emoji: '😂', isPremium: false, sortOrder: 2 },
+    { id: 'landscape',  name: 'Manzara',           description: 'Sinematik doğa veya şehir manzarası',       mode: 'scratch', systemPrompt: 'Create a breathtaking cinematic landscape with dramatic lighting, wide angle composition, rich atmospheric depth, photorealistic detail.', coinCost: 3, emoji: '🌋', isPremium: false, sortOrder: 3 },
+    { id: 'product',    name: 'Ürün Fotoğrafı',    description: 'Studio kalitesinde ürün görseli',            mode: 'scratch', systemPrompt: 'Professional product photography: clean studio setup, perfect lighting with soft shadows, white or gradient background, commercial quality composition.', coinCost: 3, emoji: '📦', isPremium: false, sortOrder: 4 },
+    // Video modu (video backend hazır olduğunda aktifleşecek)
+    { id: 'talking',    name: 'Konuşturan',        description: 'Fotoğraftaki kişiyi konuştur',               mode: 'video',   systemPrompt: 'Animate the face in the image to speak naturally with realistic lip sync, subtle head movements, and blinking. Maintain original identity and expression style.', coinCost: 5, emoji: '🗣️', isPremium: false, sortOrder: 1 },
+    { id: 'dance',      name: 'Dans',              description: 'Müzikle senkronize dans animasyonu',         mode: 'video',   systemPrompt: 'Animate the subject to perform a synchronized dance with music beat, fluid body movement, maintaining facial identity throughout the sequence.', coinCost: 6, emoji: '💃', isPremium: false, sortOrder: 2 },
+  ]).onConflictDoNothing();
+
+  console.log('Templates seeded.');
   process.exit(0);
 }
 
