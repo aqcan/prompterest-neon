@@ -6,6 +6,7 @@ export interface GenerateParams {
   modelId: string;
   inputImageBase64?: string;
   idempotencyKey: string;
+  templateId?: string; // opsiyonel — seçili şablonun system prompt'u backend'de eklenir
 }
 
 export interface GenerateResult {
