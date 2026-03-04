@@ -11,9 +11,10 @@ export interface StyleItem {
 interface StyleSelectorProps {
   selectedId: string | null;
   onSelect: (styleId: string) => void;
+  mode?: 'photo' | 'video'; // undefined = tüm stiller
 }
 
-export function StyleSelector({ selectedId, onSelect }: StyleSelectorProps) {
+export function StyleSelector({ selectedId, onSelect, mode }: StyleSelectorProps) {
   const [styles, setStyles] = useState<StyleItem[]>([]);
   const [loading, setLoading] = useState(true);
   const user = useStore((s) => s.user);
@@ -21,14 +22,15 @@ export function StyleSelector({ selectedId, onSelect }: StyleSelectorProps) {
   const userPlan = 'free'; // placeholder — Faz 9'da gerçek değer gelecek
 
   useEffect(() => {
-    fetch('/api/styles')
+    const url = mode ? `/api/styles?mode=${mode}` : '/api/styles';
+    fetch(url)
       .then((r) => r.json())
       .then((data: StyleItem[]) => {
         setStyles(data);
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, []);
+  }, [mode]);
 
   if (loading) {
     return (

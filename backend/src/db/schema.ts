@@ -62,6 +62,24 @@ export const styles = pgTable('styles', {
   systemPrompt: text('system_prompt').notNull(),
   isPremium: boolean('is_premium').notNull().default(false),
   previewImagePath: text('preview_image_path'),
+  mode: text('mode').notNull().default('photo'),
+  // 'photo' | 'video' — photo: görsel stilleri, video: hareket stilleri
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// ── templates (systemPrompt DB'de, frontend'e gönderilmez) ───────────
+// KRİTİK KURAL: id değerleri append-only, değiştirme.
+export const templates = pgTable('templates', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  mode: text('mode').notNull(),
+  // 'photo' | 'video' | 'scratch'
+  systemPrompt: text('system_prompt').notNull(),
+  coinCost: integer('coin_cost').notNull().default(0),
+  emoji: text('emoji').notNull().default('✨'),
+  isPremium: boolean('is_premium').notNull().default(false),
+  sortOrder: integer('sort_order').notNull().default(0),
   createdAt: timestamp('created_at').defaultNow(),
 });
 
@@ -72,6 +90,7 @@ export const generations = pgTable('generations', {
   status: text('status').notNull().default('pending'),
   // 'pending' | 'completed' | 'failed' | 'cancelled'
   styleId: text('style_id').references(() => styles.id),
+  templateId: text('template_id').references(() => templates.id),
   modelId: text('model_id'),
   coinCost: integer('coin_cost').notNull(),
   promptId: uuid('prompt_id').references(() => prompts.id),

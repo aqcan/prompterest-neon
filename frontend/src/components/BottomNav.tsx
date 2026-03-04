@@ -57,7 +57,7 @@ const tabs: TabDef[] = [
 export function BottomNav() {
   const activeTab = useStore((s) => s.activeTab);
   const setActiveTab = useStore((s) => s.setActiveTab);
-  const setCreateHubOpen = useStore((s) => s.setCreateHubOpen);
+  const setCreateScreenOpen = useStore((s) => s.setCreateScreenOpen);
 
   // Split tabs: 2 left of + button, 2 right
   const leftTabs = tabs.slice(0, 2);
@@ -111,7 +111,7 @@ export function BottomNav() {
         <button
           onClick={() => {
             hapticLight();
-            setCreateHubOpen(true);
+            setCreateScreenOpen(true);
           }}
           className="flex items-center justify-center w-14 h-14 rounded-full bg-accent-violet -translate-y-1 shadow-lg shadow-accent-violet/30 active:scale-95 transition-transform"
         >

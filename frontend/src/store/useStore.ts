@@ -13,6 +13,8 @@ interface AppState {
   setActiveTab: (tab: TabId) => void;
   createHubOpen: boolean;
   setCreateHubOpen: (open: boolean) => void;
+  createScreenOpen: boolean;
+  setCreateScreenOpen: (open: boolean) => void;
   user: AuthUser | null;
   authLoading: boolean;
   authError: string | null;
@@ -53,6 +55,8 @@ export const useStore = create<AppState>()((set, get) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   createHubOpen: false,
   setCreateHubOpen: (open) => set({ createHubOpen: open }),
+  createScreenOpen: false,
+  setCreateScreenOpen: (open) => set({ createScreenOpen: open }),
 
   user: null,
   authLoading: false,
