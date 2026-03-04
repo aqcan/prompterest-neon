@@ -25,3 +25,4 @@ sonar-project.properties
 prompterest.conf
 sonarqube-scan-guide.md
 .scannerwork/
+.worktrees/

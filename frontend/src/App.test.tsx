@@ -3,18 +3,17 @@ import { render, screen } from '@testing-library/react';
 import App from './App';
 import { useStore } from './store/useStore';
 
-// Isolate App from child screen implementations
-vi.mock('./screens/FeedScreen', () => ({ FeedScreen: () => <div>FeedScreen</div> }));
-vi.mock('./screens/SavedScreen', () => ({ SavedScreen: () => <div>SavedScreen</div> }));
+vi.mock('./screens/ExploreScreen', () => ({ ExploreScreen: () => <div>ExploreScreen</div> }));
+vi.mock('./screens/FollowingScreen', () => ({ FollowingScreen: () => <div>FollowingScreen</div> }));
+vi.mock('./screens/StudioScreen', () => ({ StudioScreen: () => <div>StudioScreen</div> }));
 vi.mock('./screens/ProfileScreen', () => ({ ProfileScreen: () => <div>ProfileScreen</div> }));
 vi.mock('./screens/PromptEditorScreen', () => ({ PromptEditorScreen: () => <div>PromptEditorScreen</div> }));
-vi.mock('./screens/NewPromptScreen', () => ({ NewPromptScreen: () => <div>NewPromptScreen</div> }));
 vi.mock('./components/BottomNav', () => ({ BottomNav: () => <nav>BottomNav</nav> }));
 
 const BASE_STATE = {
-  activeTab: 'feed' as const,
+  activeTab: 'explore' as const,
   editorPromptId: null,
-  newPromptOpen: false,
+  createHubOpen: false,
   initAuth: vi.fn(),
   loadPrompts: vi.fn().mockResolvedValue(undefined),
 };
@@ -27,15 +26,21 @@ describe('App', () => {
     expect(screen.getByText('BottomNav')).toBeInTheDocument();
   });
 
-  it('renders FeedScreen when activeTab is "feed"', () => {
+  it('renders ExploreScreen when activeTab is "explore"', () => {
     render(<App />);
-    expect(screen.getByText('FeedScreen')).toBeInTheDocument();
+    expect(screen.getByText('ExploreScreen')).toBeInTheDocument();
   });
 
-  it('renders SavedScreen when activeTab is "saved"', () => {
-    useStore.setState({ activeTab: 'saved' });
+  it('renders FollowingScreen when activeTab is "following"', () => {
+    useStore.setState({ activeTab: 'following' });
     render(<App />);
-    expect(screen.getByText('SavedScreen')).toBeInTheDocument();
+    expect(screen.getByText('FollowingScreen')).toBeInTheDocument();
+  });
+
+  it('renders StudioScreen when activeTab is "studio"', () => {
+    useStore.setState({ activeTab: 'studio' });
+    render(<App />);
+    expect(screen.getByText('StudioScreen')).toBeInTheDocument();
   });
 
   it('renders ProfileScreen when activeTab is "profile"', () => {
@@ -48,12 +53,6 @@ describe('App', () => {
     useStore.setState({ editorPromptId: 'some-prompt-id' });
     render(<App />);
     expect(screen.getByText('PromptEditorScreen')).toBeInTheDocument();
-  });
-
-  it('renders NewPromptScreen when newPromptOpen is true', () => {
-    useStore.setState({ newPromptOpen: true });
-    render(<App />);
-    expect(screen.getByText('NewPromptScreen')).toBeInTheDocument();
   });
 
   it('calls initAuth and loadPrompts on mount', () => {

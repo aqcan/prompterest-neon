@@ -11,6 +11,8 @@ import {
 interface AppState {
   activeTab: TabId;
   setActiveTab: (tab: TabId) => void;
+  createHubOpen: boolean;
+  setCreateHubOpen: (open: boolean) => void;
   user: AuthUser | null;
   authLoading: boolean;
   authError: string | null;
@@ -47,8 +49,10 @@ interface AppState {
 }
 
 export const useStore = create<AppState>()((set, get) => ({
-  activeTab: 'feed',
+  activeTab: 'explore',
   setActiveTab: (tab) => set({ activeTab: tab }),
+  createHubOpen: false,
+  setCreateHubOpen: (open) => set({ createHubOpen: open }),
 
   user: null,
   authLoading: false,
@@ -118,10 +122,10 @@ export const useStore = create<AppState>()((set, get) => ({
   navigateToPrompt: (promptId) => {
     const index = get().prompts.findIndex((p) => p.id === promptId);
     if (index >= 0) {
-      set({ currentFeedIndex: index, activeTab: 'feed', activeVersionId: null, activeVersionData: null });
+      set({ currentFeedIndex: index, activeTab: 'explore', activeVersionId: null, activeVersionData: null });
     } else {
       fetchPromptById(promptId).then((prompt) => {
-        set({ prompts: [prompt, ...get().prompts.filter((p) => p.id !== promptId)], currentFeedIndex: 0, activeTab: 'feed', activeVersionId: null, activeVersionData: null });
+        set({ prompts: [prompt, ...get().prompts.filter((p) => p.id !== promptId)], currentFeedIndex: 0, activeTab: 'explore', activeVersionId: null, activeVersionData: null });
       });
     }
   },

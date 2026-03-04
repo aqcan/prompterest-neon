@@ -53,7 +53,7 @@ function makeSaved(overrides: Partial<ApiSaved> = {}): ApiSaved {
 import * as api from '../services/api';
 
 const RESET_STATE = {
-  activeTab: 'feed' as const,
+  activeTab: 'explore' as const,
   user: null,
   authLoading: false,
   authError: null,
@@ -78,8 +78,8 @@ describe('useStore — tab and UI navigation', () => {
   });
 
   it('setActiveTab changes the active tab', () => {
-    useStore.getState().setActiveTab('saved');
-    expect(useStore.getState().activeTab).toBe('saved');
+    useStore.getState().setActiveTab('studio');
+    expect(useStore.getState().activeTab).toBe('studio');
   });
 
   it('openEditor sets editorPromptId', () => {
@@ -337,6 +337,6 @@ describe('useStore — version management', () => {
     useStore.getState().navigateToPrompt('p2');
     const s = useStore.getState();
     expect(s.currentFeedIndex).toBe(1);
-    expect(s.activeTab).toBe('feed');
+    expect(s.activeTab).toBe('explore');
   });
 });

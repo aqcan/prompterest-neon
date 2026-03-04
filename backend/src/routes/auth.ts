@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { users } from '../db/schema.js';
+import { users, coinBalances, coinTransactions } from '../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { SignJWT, jwtVerify } from 'jose';
 import { createHash, randomBytes } from 'node:crypto';
@@ -49,6 +49,11 @@ authRoutes.post('/register', async (c) => {
     username,
     passwordHash: hashPassword(password),
   }).returning();
+
+  // Welcome bonus: 500 coin (bir kez)
+  await db.insert(coinBalances).values({ userId: user.id, balance: 500 });
+  await db.insert(coinTransactions).values({ userId: user.id, amount: 500, type: 'welcome_bonus' });
+  await db.update(users).set({ welcomeCoinsGiven: true }).where(eq(users.id, user.id));
 
   const token = await createToken(user.id);
   return c.json({ token, user: { id: user.id, email: user.email, username: user.username } });

@@ -11,18 +11,20 @@ import { useStore, getDisplayedVersion } from '../store/useStore';
 import { BookmarkButton } from './BookmarkButton';
 import { LeftPanel } from './LeftPanel';
 import { RightPanel } from './RightPanel';
+import { UserProfileSheet } from './UserProfileSheet';
 import { hapticMedium, hapticSelection } from '../utils/haptics';
 
 interface FeedCardProps {
   prompt: ApiPrompt;
   onPanelChange?: (isOpen: boolean) => void;
+  onUnfollow?: () => void;
 }
 
 type PanelState = 'none' | 'left' | 'right';
 
 const SWIPE_THRESHOLD = 60;
 
-export function FeedCard({ prompt, onPanelChange }: Readonly<FeedCardProps>) {
+export function FeedCard({ prompt, onPanelChange, onUnfollow }: Readonly<FeedCardProps>) {
   const toggleSave = useStore((s) => s.toggleSave);
   const savedPromptIds = useStore((s) => s.savedPromptIds);
   const activeVersionId = useStore((s) => s.activeVersionId);
@@ -30,6 +32,7 @@ export function FeedCard({ prompt, onPanelChange }: Readonly<FeedCardProps>) {
   const openEditor = useStore((s) => s.openEditor);
   const user = useStore((s) => s.user);
   const [panel, setPanel] = useState<PanelState>('none');
+  const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const version = getDisplayedVersion(prompt, activeVersionData, activeVersionId);
@@ -78,33 +81,12 @@ export function FeedCard({ prompt, onPanelChange }: Readonly<FeedCardProps>) {
   };
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full h-full overflow-hidden bg-surface-1"
-    >
-      {/* Background image */}
-      <div className="absolute inset-0">
-        {imageUrl && (
-          <img
-            src={imageUrl}
-            alt={prompt.title}
-            className="w-full h-full object-cover"
-            loading="eager"
-          />
-        )}
-      </div>
-
-      {/* Swipeable card layer */}
-      <motion.div
-        style={{ x, scale, borderRadius }}
-        drag={panel === 'none' ? 'x' : false}
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.4}
-        onDragEnd={handleDragEnd}
-        className="relative w-full h-full z-10"
-        onClick={closePanel}
+    <>
+      <div
+        ref={containerRef}
+        className="relative w-full h-full overflow-hidden bg-surface-1"
       >
-        {/* Card image */}
+        {/* Background image */}
         <div className="absolute inset-0">
           {imageUrl && (
             <img
@@ -116,87 +98,148 @@ export function FeedCard({ prompt, onPanelChange }: Readonly<FeedCardProps>) {
           )}
         </div>
 
-        {/* Bottom gradient */}
-        <div className="absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
+        {/* Swipeable card layer */}
+        <motion.div
+          style={{ x, scale, borderRadius }}
+          drag={panel === 'none' ? 'x' : false}
+          dragConstraints={{ left: 0, right: 0 }}
+          dragElastic={0.4}
+          onDragEnd={handleDragEnd}
+          className="relative w-full h-full z-10"
+          onClick={closePanel}
+        >
+          {/* Card image */}
+          <div className="absolute inset-0">
+            {imageUrl && (
+              <img
+                src={imageUrl}
+                alt={prompt.title}
+                className="w-full h-full object-cover"
+                loading="eager"
+              />
+            )}
+          </div>
 
-        {/* Top gradient */}
-        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+          {/* Bottom gradient */}
+          <div className="absolute inset-x-0 bottom-0 h-72 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none" />
 
-        {/* Card content overlay */}
-        <AnimatePresence>
-          {panel === 'none' && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="absolute inset-0 flex flex-col justify-between pointer-events-none"
-            >
-              {/* Top: version badge */}
-              <div className="pt-14 px-5 pointer-events-auto">
-                {versionName && (
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/[0.08]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan" />
-                    <span className="font-mono text-[11px] text-white/80">
-                      {versionName}
+          {/* Top gradient */}
+          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+
+          {/* Card content overlay */}
+          <AnimatePresence>
+            {panel === 'none' && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="absolute inset-0 flex flex-col justify-between pointer-events-none"
+              >
+                {/* Top: version badge */}
+                <div className="pt-14 px-5 pointer-events-auto">
+                  {versionName && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/[0.08]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-accent-cyan" />
+                      <span className="font-mono text-[11px] text-white/80">
+                        {versionName}
+                      </span>
                     </span>
-                  </span>
-                )}
-              </div>
-
-              {/* Bottom: title + content + bookmark */}
-              <div className="px-5 pb-28 pointer-events-auto">
-                <div className="flex items-end gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-display text-base font-semibold text-white mb-1">
-                      {prompt.title}
-                    </h3>
-                    <p className="font-body text-[14px] leading-snug text-white/70 line-clamp-2">
-                      {content}
-                    </p>
-                    <p className="font-body text-xs text-white/30 mt-1.5">
-                      Swipe to explore
-                    </p>
-                  </div>
-                  <BookmarkButton
-                    isBookmarked={isSaved}
-                    onToggle={() => toggleSave(prompt.id)}
-                  />
+                  )}
                 </div>
-                {user && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      hapticMedium();
-                      openEditor(prompt.id);
-                    }}
-                    className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent-violet/20 border border-accent-violet/30 active:scale-95 transition-transform"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
-                    </svg>
-                    <span className="font-mono text-[11px] text-accent-violet">Refactor</span>
-                  </button>
-                )}
-              </div>
-            </motion.div>
+
+                {/* Bottom: author + title + content + bookmark */}
+                <div className="px-5 pb-28 pointer-events-auto">
+                  {/* Yazar bilgisi */}
+                  {prompt.authorUsername && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        hapticSelection();
+                        setProfileUserId(prompt.userId);
+                      }}
+                      className="flex items-center gap-2 mb-3 active:opacity-70"
+                    >
+                      <div className="w-7 h-7 rounded-full bg-white/[0.15] flex items-center justify-center flex-shrink-0">
+                        {prompt.authorAvatar ? (
+                          <img
+                            src={prompt.authorAvatar}
+                            alt={prompt.authorUsername}
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          <span className="font-display text-[11px] font-bold text-white/60 uppercase">
+                            {prompt.authorUsername[0]}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-display text-xs font-medium text-white/70">
+                        {prompt.authorUsername}
+                      </span>
+                    </button>
+                  )}
+
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-display text-base font-semibold text-white mb-1">
+                        {prompt.title}
+                      </h3>
+                      <p className="font-body text-[14px] leading-snug text-white/70 line-clamp-2">
+                        {content}
+                      </p>
+                      <p className="font-body text-xs text-white/30 mt-1.5">
+                        Swipe to explore
+                      </p>
+                    </div>
+                    <BookmarkButton
+                      isBookmarked={isSaved}
+                      onToggle={() => toggleSave(prompt.id)}
+                    />
+                  </div>
+                  {user && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        hapticMedium();
+                        openEditor(prompt.id);
+                      }}
+                      className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent-violet/20 border border-accent-violet/30 active:scale-95 transition-transform"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a3b18a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 3l1.912 5.813a2 2 0 001.275 1.275L21 12l-5.813 1.912a2 2 0 00-1.275 1.275L12 21l-1.912-5.813a2 2 0 00-1.275-1.275L3 12l5.813-1.912a2 2 0 001.275-1.275L12 3z" />
+                      </svg>
+                      <span className="font-mono text-[11px] text-accent-violet">Refactor</span>
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        {/* Panels */}
+        <AnimatePresence>
+          {panel === 'left' && (
+            <button type="button" onClick={closePanel} className="absolute inset-0 w-full h-full bg-transparent border-0 p-0 cursor-default">
+              <LeftPanel content={content} title={prompt.title} />
+            </button>
+          )}
+          {panel === 'right' && (
+            <button type="button" onClick={closePanel} className="absolute inset-0 w-full h-full bg-transparent border-0 p-0 cursor-default">
+              <RightPanel promptId={prompt.id} />
+            </button>
           )}
         </AnimatePresence>
-      </motion.div>
+      </div>
 
-      {/* Panels */}
-      <AnimatePresence>
-        {panel === 'left' && (
-          <button type="button" onClick={closePanel} className="absolute inset-0 w-full h-full bg-transparent border-0 p-0 cursor-default">
-            <LeftPanel content={content} title={prompt.title} />
-          </button>
-        )}
-        {panel === 'right' && (
-          <button type="button" onClick={closePanel} className="absolute inset-0 w-full h-full bg-transparent border-0 p-0 cursor-default">
-            <RightPanel promptId={prompt.id} />
-          </button>
-        )}
-      </AnimatePresence>
-    </div>
+      {/* User Profile Sheet */}
+      {profileUserId && (
+        <UserProfileSheet
+          userId={profileUserId}
+          onClose={() => setProfileUserId(null)}
+          onUnfollow={onUnfollow}
+        />
+      )}
+    </>
   );
 }

@@ -13,6 +13,8 @@
     "cap:sync": "cap sync",
     "cap:open:ios": "cap open ios",
     "cap:open:android": "cap open android",
+    "build:mobile": "tsc -b && vite build --config vite.config.mobile.ts --mode mobile",
+    "cap:build:android": "npm run build:mobile && cap sync android",
     "build:web": "tsc -b && vite build --config vite.config.web.ts --mode web",
     "preview:web": "vite preview --outDir web",
     "test": "vitest run",

@@ -1,10 +1,14 @@
 import { Hono } from 'hono';
 import { db } from '../db/index.js';
-import { prompts, promptVersions, savedPrompts } from '../db/schema.js';
-import { eq, desc, and } from 'drizzle-orm';
+import { prompts, promptVersions, savedPrompts, users } from '../db/schema.js';
+import { eq, desc, and, count, sql } from 'drizzle-orm';
 import { verifyToken } from './auth.js';
 
 export const promptRoutes = new Hono();
+
+// Trending cache (5 dakika)
+let trendingCache: { data: unknown[]; expiresAt: number } | null = null;
+const TRENDING_TTL_MS = 5 * 60 * 1000;
 
 async function getUser(c: any): Promise<string | null> {
   const auth = c.req.header('Authorization');
@@ -12,10 +16,82 @@ async function getUser(c: any): Promise<string | null> {
   return verifyToken(auth.slice(7));
 }
 
-// GET /api/prompts — public feed
-promptRoutes.get('/', async (c) => {
-  const list = await db.select().from(prompts)
+// GET /api/prompts/trending — en çok kaydedilen 10 prompt (cached)
+promptRoutes.get('/trending', async (c) => {
+  const now = Date.now();
+  if (trendingCache && trendingCache.expiresAt > now) {
+    return c.json(trendingCache.data);
+  }
+  const result = await db
+    .select({
+      id: prompts.id,
+      imageUrl: prompts.imageUrl,
+      styleId: prompts.styleId,
+      modelId: prompts.modelId,
+      saveCount: count(savedPrompts.id),
+    })
+    .from(prompts)
+    .leftJoin(savedPrompts, eq(prompts.id, savedPrompts.promptId))
     .where(eq(prompts.isPublic, true))
+    .groupBy(prompts.id)
+    .orderBy(desc(count(savedPrompts.id)))
+    .limit(10);
+  trendingCache = { data: result, expiresAt: now + TRENDING_TTL_MS };
+  return c.json(result);
+});
+
+// GET /api/prompts/mine — kullanıcının kendi üretimleri (auth required)
+promptRoutes.get('/mine', async (c) => {
+  const userId = await getUser(c);
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
+  const list = await db.select().from(prompts)
+    .where(eq(prompts.userId, userId))
+    .orderBy(desc(prompts.createdAt))
+    .limit(100);
+
+  return c.json(list);
+});
+
+// GET /api/prompts — public feed (tag filtreli)
+promptRoutes.get('/', async (c) => {
+  // Explicit tag filtresi (query param ile geldiyse uygula, survey'den otomatik alma)
+  let filterTags: string[] | null = null;
+
+  const tagsParam = c.req.query('tags');
+  if (tagsParam) {
+    filterTags = tagsParam.split(',').filter(Boolean);
+  }
+
+  // WHERE koşulunu oluştur
+  const baseWhere = eq(prompts.isPublic, true);
+  const whereClause = filterTags?.length
+    ? and(
+        baseWhere,
+        sql`${prompts.tags} && ARRAY[${sql.join(filterTags.map((t) => sql`${t}`), sql`, `)}]`,
+      )
+    : baseWhere;
+
+  const list = await db
+    .select({
+      id: prompts.id,
+      userId: prompts.userId,
+      title: prompts.title,
+      content: prompts.content,
+      imageUrl: prompts.imageUrl,
+      tags: prompts.tags,
+      isPublic: prompts.isPublic,
+      styleId: prompts.styleId,
+      modelId: prompts.modelId,
+      currentVersionId: prompts.currentVersionId,
+      createdAt: prompts.createdAt,
+      updatedAt: prompts.updatedAt,
+      authorUsername: users.username,
+      authorAvatar: users.avatar,
+    })
+    .from(prompts)
+    .leftJoin(users, eq(prompts.userId, users.id))
+    .where(whereClause)
     .orderBy(desc(prompts.createdAt))
     .limit(50);
 
@@ -131,4 +207,20 @@ promptRoutes.post('/:id/save', async (c) => {
 
   await db.insert(savedPrompts).values({ userId, promptId });
   return c.json({ saved: true });
+});
+
+// DELETE /api/prompts/:id — owner only
+promptRoutes.delete('/:id', async (c) => {
+  const userId = await getUser(c);
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const [prompt] = await db.select({ userId: prompts.userId })
+    .from(prompts).where(eq(prompts.id, id)).limit(1);
+
+  if (!prompt) return c.json({ error: 'Not found' }, 404);
+  if (prompt.userId !== userId) return c.json({ error: 'Forbidden' }, 403);
+
+  await db.delete(prompts).where(eq(prompts.id, id));
+  return c.json({ ok: true });
 });

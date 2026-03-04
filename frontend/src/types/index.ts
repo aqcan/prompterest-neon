@@ -1,4 +1,5 @@
-export type TabId = 'saved' | 'feed' | 'profile';
+export type TabId = 'explore' | 'following' | 'studio' | 'profile';
+// NOT: 'create' tab değil, CreateHubModal açar
 
 // ── Refactor types (unchanged) ───────────────────────────
 

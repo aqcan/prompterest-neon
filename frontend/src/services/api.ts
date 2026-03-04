@@ -14,8 +14,10 @@ export interface ApiVersion {
 export interface ApiPrompt {
   id: string; userId: string; title: string; content: string;
   imageUrl: string | null; tags: string[]; isPublic: boolean;
+  styleId?: string | null; modelId?: string | null;
   currentVersionId: string | null; currentVersion: ApiVersion | null;
   createdAt: string; updatedAt: string;
+  authorUsername?: string | null; authorAvatar?: string | null;
 }
 
 export interface ApiSaved {
@@ -30,7 +32,7 @@ export function getStoredUser(): AuthUser | null {
   const r = localStorage.getItem('auth_user'); return r ? JSON.parse(r) : null;
 }
 
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
