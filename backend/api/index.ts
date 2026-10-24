@@ -14,7 +14,7 @@ app.use('*', cors({ origin: '*' }));
 
 app.onError((err, c) => {
   console.error('[ERROR]', err);
-  return c.json({ error: err.message }, 500);
+  return c.json({ error: 'Internal server error' }, 500);
 });
 
 app.get('/health', (c) => c.json({ ok: true }));

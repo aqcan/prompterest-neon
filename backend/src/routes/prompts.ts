@@ -16,6 +16,35 @@ async function getUser(c: any): Promise<string | null> {
   return verifyToken(auth.slice(7));
 }
 
+// Private prompts are only visible to their owner; everyone else gets a 404.
+async function findVisiblePrompt(c: any, id: string) {
+  const [prompt] = await db.select().from(prompts).where(eq(prompts.id, id)).limit(1);
+  if (!prompt) return null;
+  if (prompt.isPublic) return prompt;
+  return prompt.userId === await getUser(c) ? prompt : null;
+}
+
+const LIMITS = { title: 200, content: 4000, versionName: 50, tags: 10, tag: 40, imageUrl: 7 * 1024 * 1024 };
+
+function isValidImageUrl(v: unknown): boolean {
+  if (v === undefined || v === null || v === '') return true;
+  return typeof v === 'string' && v.length <= LIMITS.imageUrl
+    && (v.startsWith('data:image/') || v.startsWith('https://'));
+}
+
+function promptInputError(body: Record<string, unknown>, fields: { title?: boolean; tags?: boolean; versionName?: boolean }): string | null {
+  const { title, content, imageUrl, tags, isPublic, versionName } = body;
+  if (typeof content !== 'string' || !content.trim() || content.length > LIMITS.content) return `content: required, max ${LIMITS.content} chars`;
+  // Prompts created through the generate flow have no title, so an empty one is allowed
+  if (fields.title && title !== undefined && (typeof title !== 'string' || title.length > LIMITS.title)) return `title: max ${LIMITS.title} chars`;
+  if (fields.versionName && versionName !== undefined && (typeof versionName !== 'string' || versionName.length > LIMITS.versionName)) return 'versionName: invalid';
+  if (fields.tags && tags !== undefined && (!Array.isArray(tags) || tags.length > LIMITS.tags
+    || tags.some((t) => typeof t !== 'string' || t.length > LIMITS.tag))) return `tags: max ${LIMITS.tags} strings`;
+  if (isPublic !== undefined && typeof isPublic !== 'boolean') return 'isPublic: must be boolean';
+  if (!isValidImageUrl(imageUrl)) return 'imageUrl: must be a data:image URL or https URL';
+  return null;
+}
+
 // GET /api/prompts/trending — en çok kaydedilen 10 prompt (cached)
 promptRoutes.get('/trending', async (c) => {
   const now = Date.now();
@@ -106,8 +135,7 @@ promptRoutes.get('/', async (c) => {
 
 // GET /api/prompts/:id
 promptRoutes.get('/:id', async (c) => {
-  const id = c.req.param('id');
-  const [prompt] = await db.select().from(prompts).where(eq(prompts.id, id)).limit(1);
+  const prompt = await findVisiblePrompt(c, c.req.param('id'));
   if (!prompt) return c.json({ error: 'Not found' }, 404);
   let currentVersion = null;
   if (prompt.currentVersionId) {
@@ -122,7 +150,10 @@ promptRoutes.post('/', async (c) => {
   const userId = await getUser(c);
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
-  const { title, content, imageUrl, tags, isPublic } = await c.req.json();
+  const body = await c.req.json();
+  const invalid = promptInputError(body, { title: true, tags: true });
+  if (invalid) return c.json({ error: invalid }, 400);
+  const { title, content, imageUrl, tags, isPublic } = body;
 
   const [prompt] = await db.insert(prompts).values({
     userId, title, content, imageUrl, tags: tags ?? [],
@@ -144,6 +175,7 @@ promptRoutes.post('/', async (c) => {
 // GET /api/prompts/:id/versions
 promptRoutes.get('/:id/versions', async (c) => {
   const id = c.req.param('id');
+  if (!await findVisiblePrompt(c, id)) return c.json({ error: 'Not found' }, 404);
   const versions = await db.select().from(promptVersions)
     .where(eq(promptVersions.promptId, id))
     .orderBy(desc(promptVersions.createdAt));
@@ -156,7 +188,14 @@ promptRoutes.post('/:id/versions', async (c) => {
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
   const id = c.req.param('id');
-  const { content, imageUrl, versionName } = await c.req.json();
+  const [owner] = await db.select({ userId: prompts.userId }).from(prompts).where(eq(prompts.id, id)).limit(1);
+  if (!owner) return c.json({ error: 'Not found' }, 404);
+  if (owner.userId !== userId) return c.json({ error: 'Forbidden' }, 403);
+
+  const body = await c.req.json();
+  const invalid = promptInputError(body, { versionName: true });
+  if (invalid) return c.json({ error: invalid }, 400);
+  const { content, imageUrl, versionName } = body;
 
   const [version] = await db.insert(promptVersions).values({
     promptId: id, content, imageUrl, versionName,

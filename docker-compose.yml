@@ -10,6 +10,12 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       PORT: 3000
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      HF_TOKEN: ${HF_TOKEN}
+      CHAT_MODEL: ${CHAT_MODEL:-}
+      IMAGE_MODEL: ${IMAGE_MODEL:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-2}
     networks:
       - sinan-internal
 
@@ -17,11 +23,6 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_OPENROUTER_KEY: ${VITE_OPENROUTER_KEY}
-        VITE_HF_TOKEN: ${VITE_HF_TOKEN}
-        VITE_IMGBB_KEY: ${VITE_IMGBB_KEY:-}
-        VITE_CHAT_MODEL: ${VITE_CHAT_MODEL:-}
-        VITE_IMAGE_MODEL: ${VITE_IMAGE_MODEL:-}
         VITE_API_URL: /prompterest
     image: sinanaqcan/prompterest-frontend:latest
     container_name: sinan-frontend

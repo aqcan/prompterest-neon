@@ -7,12 +7,8 @@ RUN npm install
 
 COPY . .
 
-# Vite env vars must be baked in at build time
-ARG VITE_OPENROUTER_KEY
-ARG VITE_HF_TOKEN
-ARG VITE_IMGBB_KEY
-ARG VITE_CHAT_MODEL
-ARG VITE_IMAGE_MODEL
+# Vite env vars are baked into the public bundle: never pass secrets here.
+# AI provider keys live on the backend (see docker-compose.yml).
 ARG VITE_API_URL=/prompterest
 ENV VITE_API_URL=${VITE_API_URL}
 

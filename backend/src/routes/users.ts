@@ -4,7 +4,7 @@ import { db } from '../db/index.js';
 import {
   userSurveys, coinBalances, coinTransactions, users,
 } from '../db/schema.js';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 
 type Env = { Variables: { userId: string } };
@@ -28,28 +28,27 @@ app.post('/survey', authMiddleware, async (c) => {
       set: { interests, completedAt: new Date() },
     });
 
-  // Welcome bonus fallback (eğer register'da verilmediyse)
-  const [user] = await db
-    .select({ welcomeCoinsGiven: users.welcomeCoinsGiven })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  // Welcome bonus fallback (eğer register'da verilmediyse).
+  // Flag'i koşullu UPDATE ile almak, eşzamanlı isteklerde bonusun iki kez verilmesini engeller.
+  await db.transaction(async (tx) => {
+    const claimed = await tx
+      .update(users)
+      .set({ welcomeCoinsGiven: true })
+      .where(and(eq(users.id, userId), eq(users.welcomeCoinsGiven, false)))
+      .returning({ id: users.id });
+    if (claimed.length === 0) return;
 
-  if (user && !user.welcomeCoinsGiven) {
-    await db.transaction(async (tx) => {
-      await tx
-        .insert(coinBalances)
-        .values({ userId, balance: 500 })
-        .onConflictDoUpdate({
-          target: coinBalances.userId,
-          set: { balance: sql`${coinBalances.balance} + 500`, updatedAt: new Date() },
-        });
-      await tx.insert(coinTransactions).values({
-        userId, amount: 500, type: 'welcome_bonus',
+    await tx
+      .insert(coinBalances)
+      .values({ userId, balance: 500 })
+      .onConflictDoUpdate({
+        target: coinBalances.userId,
+        set: { balance: sql`${coinBalances.balance} + 500`, updatedAt: new Date() },
       });
-      await tx.update(users).set({ welcomeCoinsGiven: true }).where(eq(users.id, userId));
+    await tx.insert(coinTransactions).values({
+      userId, amount: 500, type: 'welcome_bonus',
     });
-  }
+  });
 
   return c.json({ ok: true });
 });

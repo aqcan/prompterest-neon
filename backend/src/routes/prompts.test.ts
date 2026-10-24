@@ -28,6 +28,7 @@ async function makeToken(userId: string) {
 function makeSelectChain(value: unknown[]) {
   const chain: Record<string, unknown> = {};
   chain['from'] = vi.fn().mockReturnValue(chain);
+  chain['leftJoin'] = vi.fn().mockReturnValue(chain);
   chain['where'] = vi.fn().mockReturnValue(chain);
   chain['orderBy'] = vi.fn().mockReturnValue(chain);
   chain['limit'] = vi.fn().mockResolvedValue(value);
@@ -117,17 +118,67 @@ describe('POST /api/prompts', () => {
     });
     expect(res.status).toBe(201);
   });
+
+  it('400 for invalid input, without writing to the DB', async () => {
+    const token = await makeToken('u1');
+    for (const body of [
+      { title: 42, content: 'numeric title' },
+      { title: 'x'.repeat(201), content: 'C' },
+      { title: 'T', content: 'x'.repeat(4001) },
+      { title: 'T', content: 'C', imageUrl: 'javascript:alert(1)' },
+      { title: 'T', content: 'C', tags: 'not-an-array' },
+      { title: 'T', content: 'C', isPublic: 'yes' },
+    ]) {
+      const res = await app.request('/api/prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      expect(res.status).toBe(400);
+    }
+    expect(db.insert).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/prompts/:id/versions', () => {
   beforeEach(() => vi.resetAllMocks());
 
   it('returns versions array', async () => {
-    vi.mocked(db.select).mockReturnValue(makeSelectChain([mockVersion]) as never);
+    vi.mocked(db.select)
+      .mockReturnValueOnce(makeSelectChain([mockPrompt]) as never)
+      .mockReturnValueOnce(makeSelectChain([mockVersion]) as never);
     const res = await app.request('/api/prompts/p1/versions');
     expect(res.status).toBe(200);
     const data = await res.json() as unknown[];
     expect(Array.isArray(data)).toBe(true);
+  });
+
+  it('404 for a private prompt when the caller is not the owner', async () => {
+    vi.mocked(db.select).mockReturnValueOnce(makeSelectChain([{ ...mockPrompt, isPublic: false }]) as never);
+    const res = await app.request('/api/prompts/p1/versions', {
+      headers: { Authorization: `Bearer ${await makeToken('someone-else')}` },
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('private prompt visibility', () => {
+  beforeEach(() => vi.resetAllMocks());
+
+  it('GET /:id hides a private prompt from anonymous users', async () => {
+    vi.mocked(db.select).mockReturnValueOnce(makeSelectChain([{ ...mockPrompt, isPublic: false }]) as never);
+    const res = await app.request('/api/prompts/p1');
+    expect(res.status).toBe(404);
+  });
+
+  it('GET /:id shows a private prompt to its owner', async () => {
+    vi.mocked(db.select)
+      .mockReturnValueOnce(makeSelectChain([{ ...mockPrompt, isPublic: false }]) as never)
+      .mockReturnValueOnce(makeSelectChain([mockVersion]) as never);
+    const res = await app.request('/api/prompts/p1', {
+      headers: { Authorization: `Bearer ${await makeToken('u1')}` },
+    });
+    expect(res.status).toBe(200);
   });
 });
 
@@ -145,6 +196,7 @@ describe('POST /api/prompts/:id/versions', () => {
 
   it('201 creates version', async () => {
     const token = await makeToken('u1');
+    vi.mocked(db.select).mockReturnValue(makeSelectChain([{ userId: 'u1' }]) as never);
     vi.mocked(db.insert).mockReturnValue(makeInsertChain([mockVersion]) as never);
     vi.mocked(db.update).mockReturnValue(makeUpdateChain([mockPrompt]) as never);
 
@@ -154,6 +206,30 @@ describe('POST /api/prompts/:id/versions', () => {
       body: JSON.stringify({ content: 'updated content', versionName: 'v2' }),
     });
     expect(res.status).toBe(201);
+  });
+
+  it('403 and writes nothing when the caller does not own the prompt', async () => {
+    const token = await makeToken('attacker');
+    vi.mocked(db.select).mockReturnValue(makeSelectChain([{ userId: 'u1' }]) as never);
+
+    const res = await app.request('/api/prompts/p1/versions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ content: 'defaced', versionName: 'v2' }),
+    });
+    expect(res.status).toBe(403);
+    expect(db.insert).not.toHaveBeenCalled();
+    expect(db.update).not.toHaveBeenCalled();
+  });
+
+  it('404 when the prompt does not exist', async () => {
+    vi.mocked(db.select).mockReturnValue(makeSelectChain([]) as never);
+    const res = await app.request('/api/prompts/missing/versions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await makeToken('u1')}` },
+      body: JSON.stringify({ content: 'x', versionName: 'v2' }),
+    });
+    expect(res.status).toBe(404);
   });
 });
 

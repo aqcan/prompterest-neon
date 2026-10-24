@@ -195,6 +195,15 @@ export const useStore = create<AppState>()((set, get) => ({
   applyRefactorResult: async (promptId, newContent, imageUrl) => {
     const { user, prompts, versionHistory } = get();
     if (!user) throw new Error('Login required to save a version');
+    const source = prompts.find((p) => p.id === promptId);
+    if (source && source.userId !== user.id) {
+      // Not the owner: save the edit as the user's own copy instead of versioning someone else's prompt
+      const copy = await createPromptWithVersion(
+        source.title, newContent, imageUrl ?? source.currentVersion?.imageUrl ?? undefined, source.tags,
+      );
+      set({ prompts: [copy, ...prompts], activeVersionId: null, activeVersionData: null });
+      return;
+    }
     const versionName = 'v' + (versionHistory.length + 1);
     const newVersion = await createVersion(promptId, newContent, versionName, imageUrl);
     set({ prompts: prompts.map((p) => p.id === promptId ? { ...p, currentVersionId: newVersion.id, currentVersion: newVersion } : p), activeVersionId: null, activeVersionData: null });

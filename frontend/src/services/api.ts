@@ -76,96 +76,13 @@ export async function toggleSavePrompt(promptId: string): Promise<{ saved: boole
   return apiFetch<{ saved: boolean }>(`/api/prompts/${promptId}/save`, { method: 'POST' });
 }
 
-// OpenRouter — primary LLM provider (free tier available)
-const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
-// HuggingFace Inference Providers router — fallback LLM
-const HF_CHAT_URL = 'https://router.huggingface.co/v1/chat/completions';
-// HuggingFace image generation (unchanged)
-const HF_BASE = 'https://router.huggingface.co/hf-inference/models';
 
-// HuggingFace fallback models (credits often depleted)
-const HF_CHAT_MODELS = [
-  'meta-llama/Llama-3.1-8B-Instruct', // Cerebras — fastest
-  'Qwen/Qwen3-Coder-Next',             // solid JSON output
-  'deepseek-ai/DeepSeek-V3.2',         // good quality, wraps in ```json (parser handles it)
-];
+// ── AI (proxied through the backend; provider keys never reach the browser) ──
 
-const SYSTEM_PROMPT = `You are a prompt engineering expert. The user gives you an image generation prompt.
-Pick 3 short phrases from it and suggest 3 alternatives for each.
-
-Reply ONLY with this exact JSON format:
-{"segments":[{"original":"phrase from prompt","alternatives":["alt1","alt2","alt3"]},{"original":"phrase from prompt","alternatives":["alt1","alt2","alt3"]},{"original":"phrase from prompt","alternatives":["alt1","alt2","alt3"]}]}
-
-Rules:
-- No explanation, no markdown, no thinking, ONLY the JSON object
-- "original" must be an exact substring from the user's prompt
-- Exactly 3 segments, exactly 3 alternatives each`;
-
-export interface JsonCharState { depth: number; inStr: boolean; esc: boolean; }
-
-export function processJsonChar(ch: string, state: JsonCharState): boolean {
-  if (state.esc) { state.esc = false; return false; }
-  if (ch === '\\') { state.esc = true; return false; }
-  if (ch === '"') { state.inStr = !state.inStr; return false; }
-  if (state.inStr) return false;
-  if (ch === '{') { state.depth++; return false; }
-  if (ch === '}') { state.depth--; return state.depth === 0; }
-  return false;
-}
-
-export function findJsonBounds(text: string): [number, number] | null {
-  const startIdx = text.indexOf('{');
-  if (startIdx === -1) return null;
-  const state: JsonCharState = { depth: 0, inStr: false, esc: false };
-  for (let i = startIdx; i < text.length; i++) {
-    if (processJsonChar(text[i], state)) return [startIdx, i];
-  }
-  return null;
-}
-
-export function parseSegmentsFormat1(
-  parsed: Record<string, unknown>
-): Array<{ original: string; alternatives: string[] }> | null {
-  if (!Array.isArray(parsed.segments)) return null;
-  return (parsed.segments as Array<{ original: string; alternatives: string[] }>)
-    .slice(0, 3)
-    .map((s) => ({
-      original: s.original,
-      alternatives: Array.isArray(s.alternatives) ? s.alternatives.slice(0, 3) : [],
-    }));
-}
-
-export function parseSegmentsFormat2(
-  parsed: Record<string, unknown>
-): Array<{ original: string; alternatives: string[] }> | null {
-  const segments: Array<{ original: string; alternatives: string[] }> = [];
-  for (const [key, value] of Object.entries(parsed)) {
-    if (Array.isArray(value) && value.length > 0 && typeof value[0] === 'string') {
-      segments.push({ original: key, alternatives: (value as string[]).slice(0, 3) });
-    }
-    if (segments.length >= 3) break;
-  }
-  return segments.length > 0 ? segments : null;
-}
-
-export function parseRawSegments(raw: string): Array<{ original: string; alternatives: string[] }> {
-  let text = raw;
-  text = text.replaceAll(/<think>[\s\S]*?(<\/think>|$)/gi, '');
-  text = text.replaceAll(/<reasoning>[\s\S]*?(<\/reasoning>|$)/gi, '');
-  text = text.replaceAll(/```json\s*/gi, '').replaceAll(/```\s*/gi, '').trim();
-
-  const bounds = findJsonBounds(text);
-  if (!bounds) throw new Error('No JSON found in LLM response.');
-
-  const parsed = JSON.parse(text.slice(bounds[0], bounds[1] + 1)) as Record<string, unknown>;
-
-  const result = parseSegmentsFormat1(parsed) ?? parseSegmentsFormat2(parsed);
-  if (!result) throw new Error('Could not extract segments from LLM response.');
-  return result;
-}
+type RawSegment = { original: string; alternatives: string[] };
 
 function toRefactorSegments(
-  raw: Array<{ original: string; alternatives: string[] }>,
+  raw: RawSegment[],
   prompt: string
 ): RefactorSegment[] {
   const result: RefactorSegment[] = [];
@@ -184,176 +101,15 @@ function toRefactorSegments(
   return result;
 }
 
-async function callOpenRouterChat(promptText: string, model: string, apiKey: string): Promise<string> {
-  const res = await fetch(OPENROUTER_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: promptText },
-      ],
-      temperature: 0.7,
-      max_tokens: 1024,
-    }),
-  });
-
-  if (!res.ok) {
-    const t = await res.text();
-    let msg = `OpenRouter ${res.status}`;
-    try { msg = (JSON.parse(t) as { error?: { message?: string } }).error?.message ?? msg; } catch { /* keep */ }
-    throw new Error(msg);
-  }
-
-  const data = await res.json() as {
-    choices: Array<{ message: { content?: string; reasoning?: string } }>;
-  };
-  const msg = data.choices?.[0]?.message;
-  return msg?.content || msg?.reasoning || '';
-}
-
-async function callHfChat(promptText: string, model: string, token: string): Promise<string> {
-  const res = await fetch(HF_CHAT_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: promptText },
-      ],
-      max_tokens: 512,
-      temperature: 0.7,
-    }),
-  });
-
-  if (res.status === 429) throw new Error('RATE_LIMIT');
-  if (!res.ok) {
-    const t = await res.text();
-    let msg = `HF ${res.status}`;
-    try {
-      const parsed = JSON.parse(t) as { error?: string | { message?: string } };
-      if (parsed.error) {
-        msg = typeof parsed.error === 'string'
-          ? parsed.error
-          : (parsed.error.message ?? msg);
-      }
-    } catch { /* keep default */ }
-    throw new Error(msg);
-  }
-
-  const data = await res.json() as {
-    choices: Array<{ message: { content?: string; reasoning?: string } }>;
-  };
-  const msg = data.choices?.[0]?.message;
-  // Some models put output in `reasoning` when content is empty
-  return msg?.content || msg?.reasoning || '';
-}
-
-async function tryHfModelOnce(
-  promptText: string,
-  model: string,
-  token: string
-): Promise<Array<{ original: string; alternatives: string[] }>> {
-  const rawContent = await callHfChat(promptText, model, token);
-  const rawSegments = parseRawSegments(rawContent);
-  if (rawSegments.length === 0) throw new Error('No valid segments found.');
-  return rawSegments;
-}
-
-type HfAttemptResult =
-  | { ok: true; segments: Array<{ original: string; alternatives: string[] }> }
-  | { ok: false; rateLimited: boolean; error: Error };
-
-async function attemptHfModel(
-  promptText: string,
-  model: string,
-  token: string
-): Promise<HfAttemptResult> {
-  try {
-    const rawSegments = await tryHfModelOnce(promptText, model, token);
-    return { ok: true, segments: rawSegments };
-  } catch (err) {
-    const e = err instanceof Error ? err : new Error('Failed');
-    return { ok: false, rateLimited: e.message === 'RATE_LIMIT', error: e };
-  }
-}
-
-async function tryHfFallback(prompt: string): Promise<RefactorResult> {
-  const token = import.meta.env.VITE_HF_TOKEN;
-  if (!token) throw new Error('VITE_HF_TOKEN is not set');
-  let lastError: Error = new Error('Refactor failed');
-  for (const model of HF_CHAT_MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await attemptHfModel(prompt, model, token);
-      if (res.ok) return { originalPrompt: prompt, segments: toRefactorSegments(res.segments, prompt) };
-      if (res.rateLimited) { lastError = new Error(`${model.split('/')[1]} rate limited, trying next...`); break; }
-      lastError = res.error;
-    }
-  }
-  throw lastError;
-}
-
 export async function refactorPrompt(prompt: string): Promise<RefactorResult> {
-  const openRouterKey = import.meta.env.VITE_OPENROUTER_KEY;
-  const openRouterModel = import.meta.env.VITE_CHAT_MODEL || 'nvidia/nemotron-3-nano-30b-a3b:free';
-
-  if (openRouterKey) {
-    try {
-      const rawContent = await callOpenRouterChat(prompt, openRouterModel, openRouterKey);
-      const rawSegments = parseRawSegments(rawContent);
-      const segments = toRefactorSegments(rawSegments, prompt);
-      if (segments.length > 0) return { originalPrompt: prompt, segments };
-    } catch {
-      // Fall through to HuggingFace
-    }
-  }
-
-  return tryHfFallback(prompt);
+  const { segments } = await apiFetch<{ segments: RawSegment[] }>('/api/ai/refactor', {
+    method: 'POST', body: JSON.stringify({ prompt }),
+  });
+  return { originalPrompt: prompt, segments: toRefactorSegments(segments, prompt) };
 }
 
-export async function generateImage(
-  prompt: string
-): Promise<{ imageUrl: string; imageBlob: Blob }> {
-  const token = import.meta.env.VITE_HF_TOKEN;
-  const model = import.meta.env.VITE_IMAGE_MODEL || 'black-forest-labs/FLUX.1-schnell';
-  if (!token) throw new Error('VITE_HF_TOKEN is not set');
-
-  const res = await fetch(`${HF_BASE}/${model}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ inputs: prompt }),
+export async function generateImage(prompt: string): Promise<{ imageUrl: string }> {
+  return apiFetch<{ imageUrl: string }>('/api/ai/image', {
+    method: 'POST', body: JSON.stringify({ prompt }),
   });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    let msg = `Image generation failed (${res.status})`;
-    try {
-      const p = JSON.parse(errText) as { error?: string };
-      if (p.error) msg = p.error;
-    } catch { /* use default */ }
-    throw new Error(msg);
-  }
-
-  const imageBlob = await res.blob();
-
-  // Store as base64 data URL directly in Neon
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(imageBlob);
-  });
-
-  return { imageUrl: dataUrl, imageBlob };
 }

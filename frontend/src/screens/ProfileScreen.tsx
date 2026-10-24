@@ -102,7 +102,7 @@ export function ProfileScreen() {
             />
             <input
               type="password"
-              placeholder="Password"
+              placeholder={isRegisterMode ? 'Password (min. 8 characters)' : 'Password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3.5 rounded-2xl bg-surface-2 border border-white/[0.06] font-body text-sm text-white placeholder:text-white/25 outline-none focus:border-accent-violet/30 transition-colors"
@@ -114,7 +114,7 @@ export function ProfileScreen() {
 
             <button
               onClick={handleSubmit}
-              disabled={authLoading || !email || !password}
+              disabled={authLoading || !email || !password || (isRegisterMode && password.length < 8)}
               className="w-full py-3.5 rounded-2xl bg-accent-violet font-display text-sm font-semibold text-white active:scale-[0.97] transition-transform disabled:opacity-50"
             >
               {authLoading ? (

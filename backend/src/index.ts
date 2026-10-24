@@ -10,14 +10,45 @@ import generateRoute from './routes/generate.js';
 import coinsRoute from './routes/coins.js';
 import usersRoute from './routes/users.js';
 import socialRoute from './routes/social.js';
+import aiRoute from './routes/ai.js';
+import { HTTPException } from 'hono/http-exception';
+import { bodyLimit } from 'hono/body-limit';
+
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET is not set; refusing to start');
+}
 
 const app = new Hono();
 
-app.use('*', cors({ origin: '*' }));
+// The web app is served same-origin through nginx; CORS only matters for the
+// Capacitor Android app (http://localhost) and local dev servers.
+const DEFAULT_ORIGINS = [
+  'https://prompterest.sinanakcan.com',
+  'https://www.sinanakcan.com',
+  'http://localhost',
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+  : DEFAULT_ORIGINS;
 
+app.use('*', cors({ origin: allowedOrigins }));
+
+// Generated images travel as base64 data URLs, so allow a few MB but no more.
+app.use('/api/*', bodyLimit({
+  maxSize: 8 * 1024 * 1024,
+  onError: (c) => c.json({ error: 'Request body too large' }, 413),
+}));
+
+// Intentional HTTPExceptions keep their status and message; anything else is
+// logged server-side and returned as a generic 500 so DB/internal details don't leak.
 app.onError((err, c) => {
+  if (err instanceof HTTPException) {
+    return c.json({ error: err.message }, err.status);
+  }
   console.error('[ERROR]', err);
-  return c.json({ error: err.message }, 500);
+  return c.json({ error: 'Internal server error' }, 500);
 });
 
 app.get('/api/health', (c) => c.json({ ok: true }));
@@ -29,6 +60,7 @@ app.route('/api/generate', generateRoute);
 app.route('/api/coins', coinsRoute);
 app.route('/api/users', usersRoute);
 app.route('/api/social', socialRoute);
+app.route('/api/ai', aiRoute);
 
 const port = Number(process.env.PORT) || 3000;
 console.log(`Server running on port ${port}`);

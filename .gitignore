@@ -8,6 +8,7 @@ frontend/dist/
 frontend/web/
 frontend/android/
 frontend/coverage/
+backend/coverage/
 .claude/
 tmpclaude-*
 

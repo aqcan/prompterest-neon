@@ -317,6 +317,21 @@ describe('useStore — version management', () => {
     expect(useStore.getState().activeVersionId).toBeNull();
   });
 
+  it('applyRefactorResult saves a copy instead of versioning someone else\'s prompt', async () => {
+    const othersPrompt = makePrompt({ id: 'p9', userId: 'someone-else', title: 'Theirs', tags: ['art'] });
+    const copy = makePrompt({ id: 'p10', userId: 'u1', title: 'Theirs', content: 'Remixed' });
+    useStore.setState({ user: makeUser(), prompts: [othersPrompt], versionHistory: [] });
+    vi.mocked(api.createPromptWithVersion).mockResolvedValueOnce(copy);
+    vi.mocked(api.createVersion).mockClear();
+
+    await useStore.getState().applyRefactorResult('p9', 'Remixed');
+
+    expect(api.createVersion).not.toHaveBeenCalled();
+    expect(api.createPromptWithVersion).toHaveBeenCalledWith('Theirs', 'Remixed', undefined, ['art']);
+    const ids = useStore.getState().prompts.map((p) => p.id);
+    expect(ids).toEqual(['p10', 'p9']);
+  });
+
   it('applyRefactorResult throws when user is not logged in', async () => {
     useStore.setState({ user: null });
     await expect(
