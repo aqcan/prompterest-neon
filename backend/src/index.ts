@@ -13,25 +13,13 @@ import socialRoute from './routes/social.js';
 import aiRoute from './routes/ai.js';
 import { HTTPException } from 'hono/http-exception';
 import { bodyLimit } from 'hono/body-limit';
+import { allowedOrigins } from './utils/corsOrigins.js';
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET is not set; refusing to start');
 }
 
 const app = new Hono();
-
-// The web app is served same-origin through nginx; CORS only matters for the
-// Capacitor Android app (http://localhost) and local dev servers.
-const DEFAULT_ORIGINS = [
-  'https://prompterest.sinanakcan.com',
-  'https://www.sinanakcan.com',
-  'http://localhost',
-  'http://localhost:5173',
-  'http://localhost:5174',
-];
-const allowedOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
-  : DEFAULT_ORIGINS;
 
 app.use('*', cors({ origin: allowedOrigins }));
 

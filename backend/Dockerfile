@@ -16,5 +16,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
 RUN npm install --omit=dev
 
+# The image ships an unprivileged "node" user; the app only reads /app.
+USER node
+
 EXPOSE 3000
 CMD ["node", "dist/src/index.js"]
