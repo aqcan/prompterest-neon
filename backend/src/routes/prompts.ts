@@ -217,7 +217,8 @@ promptRoutes.get('/saved/list', async (c) => {
 
   const withPrompts = await Promise.all(saved.map(async (s) => {
     const [prompt] = await db.select().from(prompts).where(eq(prompts.id, s.promptId)).limit(1);
-    if (!prompt) return null;
+    // A prompt made private after it was saved is hidden from everyone but its owner.
+    if (!prompt || (!prompt.isPublic && prompt.userId !== userId)) return null;
     let currentVersion = null;
     if (prompt.currentVersionId) {
       const [ver] = await db.select().from(promptVersions).where(eq(promptVersions.id, prompt.currentVersionId)).limit(1);
@@ -243,6 +244,9 @@ promptRoutes.post('/:id/save', async (c) => {
     await db.delete(savedPrompts).where(eq(savedPrompts.id, existing[0].id));
     return c.json({ saved: false });
   }
+
+  // Saving needs the same visibility as reading: knowing a private prompt's id is not enough.
+  if (!await findVisiblePrompt(c, promptId)) return c.json({ error: 'Not found' }, 404);
 
   await db.insert(savedPrompts).values({ userId, promptId });
   return c.json({ saved: true });

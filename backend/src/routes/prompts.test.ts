@@ -254,6 +254,31 @@ describe('GET /api/prompts/saved/list', () => {
     const data = await res.json() as unknown[];
     expect(Array.isArray(data)).toBe(true);
   });
+
+  it('hides a saved prompt that another user has since made private', async () => {
+    const token = await makeToken('reader');
+    vi.mocked(db.select)
+      .mockReturnValueOnce(makeSelectChain([{ ...mockSaved, userId: 'reader' }]) as never)
+      .mockReturnValueOnce(makeSelectChain([{ ...mockPrompt, isPublic: false }]) as never);
+    const res = await app.request('/api/prompts/saved/list', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  it('keeps the owner\'s own private prompt in their saved list', async () => {
+    const token = await makeToken('u1');
+    vi.mocked(db.select)
+      .mockReturnValueOnce(makeSelectChain([mockSaved]) as never)
+      .mockReturnValueOnce(makeSelectChain([{ ...mockPrompt, isPublic: false }]) as never)
+      .mockReturnValueOnce(makeSelectChain([mockVersion]) as never);
+    const res = await app.request('/api/prompts/saved/list', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveLength(1);
+  });
 });
 
 describe('POST /api/prompts/:id/save', () => {
@@ -266,7 +291,9 @@ describe('POST /api/prompts/:id/save', () => {
 
   it('saves prompt when not yet saved', async () => {
     const token = await makeToken('u1');
-    vi.mocked(db.select).mockReturnValue(makeSelectChain([]) as never);
+    vi.mocked(db.select)
+      .mockReturnValueOnce(makeSelectChain([]) as never)
+      .mockReturnValueOnce(makeSelectChain([mockPrompt]) as never);
     vi.mocked(db.insert).mockReturnValue(makeInsertChain([mockSaved]) as never);
 
     const res = await app.request('/api/prompts/p1/save', {
@@ -276,6 +303,30 @@ describe('POST /api/prompts/:id/save', () => {
     expect(res.status).toBe(200);
     const data = await res.json() as { saved: boolean };
     expect(data.saved).toBe(true);
+  });
+
+  it('404 and saves nothing for another user\'s private prompt', async () => {
+    const token = await makeToken('attacker');
+    vi.mocked(db.select)
+      .mockReturnValueOnce(makeSelectChain([]) as never)
+      .mockReturnValueOnce(makeSelectChain([{ ...mockPrompt, isPublic: false }]) as never);
+
+    const res = await app.request('/api/prompts/p1/save', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(404);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('404 when the prompt does not exist', async () => {
+    vi.mocked(db.select).mockReturnValue(makeSelectChain([]) as never);
+    const res = await app.request('/api/prompts/missing/save', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${await makeToken('u1')}` },
+    });
+    expect(res.status).toBe(404);
+    expect(db.insert).not.toHaveBeenCalled();
   });
 
   it('unsaves prompt when already saved', async () => {

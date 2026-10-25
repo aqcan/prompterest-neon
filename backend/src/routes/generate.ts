@@ -5,7 +5,7 @@ import {
   generations, styles, templates, prompts,
   coinBalances, coinTransactions,
 } from '../db/schema.js';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { authMiddleware } from '../middleware/auth.js';
 import { buildPromptWithStyle } from '../utils/buildPrompt.js';
 import { calculateCost } from '../utils/coinCosts.js';
@@ -74,10 +74,11 @@ app.post('/', authMiddleware, async (c) => {
     throw new HTTPException(400, { message: 'style_and_model_required' });
   }
 
-  // 1. Idempotency kontrolü — aynı key ile tekrar gönderim engelle
+  // 1. Idempotency kontrolü — aynı key ile tekrar gönderim engelle.
+  // Key istemciden gelir; başka kullanıcının kaydına ulaşılmasın diye userId ile sınırlı.
   if (idempotencyKey) {
     const existing = await db.query.generations.findFirst({
-      where: eq(generations.idempotencyKey, idempotencyKey),
+      where: and(eq(generations.idempotencyKey, idempotencyKey), eq(generations.userId, userId)),
     });
     if (existing?.status === 'completed') {
       return c.json({ generationId: existing.id, promptId: existing.promptId });
@@ -96,16 +97,34 @@ app.post('/', authMiddleware, async (c) => {
     .values({ userId, styleId, templateId: templateId ?? null, modelId, idempotencyKey, coinCost, status: 'pending' })
     .returning();
 
-  // 3. Style doğrulaması + premium guard
+  // 3. Style + template doğrulaması + premium guard — coin kesilmeden önce,
+  // böylece reddedilen istek coin kaybettirmez.
   const style = await db.query.styles.findFirst({ where: eq(styles.id, styleId) });
   if (!style) {
     await failGeneration(gen.id, '400');
     throw new HTTPException(400, { message: 'invalid_style' });
   }
+  let templateSystemPrompt = '';
+  let isPremiumTemplate = false;
+  if (templateId) {
+    const template = await db.query.templates.findFirst({
+      where: eq(templates.id, templateId),
+    });
+    if (!template) {
+      await failGeneration(gen.id, '400');
+      throw new HTTPException(400, { message: 'invalid_template' });
+    }
+    templateSystemPrompt = template.systemPrompt;
+    isPremiumTemplate = template.isPremium;
+  }
   const userPlan = await getUserPlan(userId);
   if (style.isPremium && userPlan === 'free') {
     await failGeneration(gen.id, '403');
     throw new HTTPException(403, { message: 'premium_style_required' });
+  }
+  if (isPremiumTemplate && userPlan === 'free') {
+    await failGeneration(gen.id, '403');
+    throw new HTTPException(403, { message: 'premium_template_required' });
   }
 
   // 4. Coin kesme (atomik transaction + row lock)
@@ -139,19 +158,6 @@ app.post('/', authMiddleware, async (c) => {
     }
     await failGeneration(gen.id, '500');
     throw e;
-  }
-
-  // 3b. Template yükleme (opsiyonel)
-  let templateSystemPrompt = '';
-  if (templateId) {
-    const template = await db.query.templates.findFirst({
-      where: eq(templates.id, templateId),
-    });
-    if (!template) {
-      await failGeneration(gen.id, '400');
-      throw new HTTPException(400, { message: 'invalid_template' });
-    }
-    templateSystemPrompt = template.systemPrompt;
   }
 
   // 5. Prompt birleştir (systemPrompt backend'de eklenir: style + template + userText)
